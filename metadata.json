@@ -1,0 +1,5 @@
+{
+  "name": "Secure IPC Framework",
+  "description": "A comprehensive demonstration dashboard for a secure Inter-Process Communication (IPC) framework. Features interactive simulations of Message Queues, Pipes, and Shared Memory with enterprise-grade security controls like encryption, HMAC signing, and process authentication.",
+  "requestFramePermissions": []
+}
