@@ -1,5 +1,5 @@
 import React from 'react';
-import { Terminal, CheckCircle, AlertCircle, Lock, Unlock, Send, ShieldCheck, Info, MessageSquare, FileJson, Database, Shield, Eye, Edit3, Key, ChevronDown } from 'lucide-react';
+import { Terminal, CheckCircle, AlertCircle, Lock, Unlock, Send, ShieldCheck, Info, MessageSquare, FileJson, Database, Shield, Eye, Edit3, Key, ChevronDown, Stethoscope } from 'lucide-react';
 import { IpcMethod } from '../types';
 
 interface ControlPanelProps {
@@ -19,6 +19,8 @@ interface ControlPanelProps {
   setSigningEnabled: (enabled: boolean) => void;
   handleSendMessage: () => void;
   isChannelBusy: boolean;
+  runDiagnostics?: () => void;
+  isDiagnosing?: boolean;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -37,7 +39,9 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   signingEnabled,
   setSigningEnabled,
   handleSendMessage,
-  isChannelBusy
+  isChannelBusy,
+  runDiagnostics,
+  isDiagnosing = false
 }) => {
   const quickScenarios = [
     { label: 'Hello World', icon: MessageSquare, value: 'Hello Secure World!' },
@@ -57,10 +61,23 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
          </div>
       )}
 
-      <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-        <Terminal className="w-6 h-6 text-purple-400" />
-        Sender Control
-      </h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-2xl font-bold flex items-center gap-2">
+          <Terminal className="w-6 h-6 text-purple-400" />
+          Sender Control
+        </h2>
+        
+        {runDiagnostics && (
+            <button 
+                onClick={runDiagnostics}
+                disabled={isDiagnosing}
+                className="flex items-center gap-1.5 px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded-md text-xs font-mono text-slate-300 border border-slate-600 transition-colors disabled:opacity-50"
+            >
+                <Stethoscope className={`w-3.5 h-3.5 ${isDiagnosing ? 'animate-pulse text-yellow-400' : 'text-slate-400'}`} />
+                {isDiagnosing ? 'Running Tests...' : 'Run Diagnostics'}
+            </button>
+        )}
+      </div>
 
       {/* 1. Identity & Access Section */}
       <div className={`mb-4 p-4 rounded-lg transition-all border ${

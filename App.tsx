@@ -11,17 +11,18 @@ import SystemMonitor from './components/SystemMonitor';
 import { Log, IpcMethod, ActiveTab, PYTHON_CODE, JAVA_CODE, ChannelData, SystemStats } from './types';
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('python');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('demo');
   const [ipcMethod, setIpcMethod] = useState<IpcMethod>('queue');
   const [message, setMessage] = useState('');
   const [encrypt, setEncrypt] = useState(false);
   const [signingEnabled, setSigningEnabled] = useState(true);
-  const [permissions, setPermissions] = useState<string>('admin');
+  const [permissions, setPermissions] = useState<string>('read');
   const [logs, setLogs] = useState<Log[]>([]);
   const [processId, setProcessId] = useState('process_alpha_1');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [authToken, setAuthToken] = useState('');
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
   
   // New State for features
   const [channelData, setChannelData] = useState<ChannelData | null>(null);
@@ -43,6 +44,29 @@ const App = () => {
     const ms = now.getMilliseconds().toString().padStart(3, '0');
     const timestamp = `${timeStr}.${ms}`;
     setLogs(prev => [...prev, { type, message, timestamp }]);
+  };
+
+  // --- DIAGNOSTICS SUITE (Simulated Unit Tests) ---
+  const runDiagnostics = async () => {
+    if (isDiagnosing) return;
+    setIsDiagnosing(true);
+    addLog('info', 'SYSTEM: Starting Pre-Flight Diagnostics...');
+    
+    const steps = [
+        { msg: 'TEST: Validating CSPRNG entropy...', type: 'debug', delay: 300 },
+        { msg: 'PASS: Entropy pool sufficient (256 bits).', type: 'success', delay: 600 },
+        { msg: 'TEST: Checking AES-GCM vector support...', type: 'debug', delay: 900 },
+        { msg: 'PASS: Hardware acceleration enabled (AES-NI).', type: 'success', delay: 1200 },
+        { msg: 'TEST: Verifying IPC socket permissions...', type: 'debug', delay: 1500 },
+        { msg: 'PASS: Write access confirmed on /tmp/secure_fifo.', type: 'success', delay: 1800 },
+        { msg: 'SYSTEM: All systems nominal. Ready for secure transmission.', type: 'info', delay: 2100 }
+    ];
+
+    for (const step of steps) {
+        await new Promise(r => setTimeout(r, step.delay - (steps[steps.indexOf(step)-1]?.delay || 0)));
+        addLog(step.type as any, step.msg);
+    }
+    setIsDiagnosing(false);
   };
 
   const handleAuthenticate = () => {
@@ -266,6 +290,8 @@ const App = () => {
                       setSigningEnabled={setSigningEnabled}
                       handleSendMessage={handleSendMessage}
                       isChannelBusy={!!channelData}
+                      runDiagnostics={runDiagnostics}
+                      isDiagnosing={isDiagnosing}
                     />
                   </div>
                   <div className="flex-1">
