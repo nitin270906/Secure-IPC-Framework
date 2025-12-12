@@ -11,11 +11,12 @@ import SystemMonitor from './components/SystemMonitor';
 import { Log, IpcMethod, ActiveTab, PYTHON_CODE, JAVA_CODE, ChannelData, SystemStats } from './types';
 
 const App = () => {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('demo');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('python');
   const [ipcMethod, setIpcMethod] = useState<IpcMethod>('queue');
   const [message, setMessage] = useState('');
   const [encrypt, setEncrypt] = useState(false);
   const [signingEnabled, setSigningEnabled] = useState(true);
+  const [permissions, setPermissions] = useState<string>('admin');
   const [logs, setLogs] = useState<Log[]>([]);
   const [processId, setProcessId] = useState('process_alpha_1');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -46,8 +47,8 @@ const App = () => {
 
   const handleAuthenticate = () => {
     addLog('info', `Initiating handshake for ${processId}...`);
+    addLog('debug', `Requesting permissions: [${permissions.toUpperCase()}]`);
     addLog('debug', 'Protocol: TLS 1.3 handshake initiated.');
-    addLog('debug', 'Generating ephemeral keypair for session negotiation.');
     
     setTimeout(() => {
         const token = 'tok_' + Math.random().toString(36).substr(2, 16);
@@ -251,6 +252,8 @@ const App = () => {
                      <ControlPanel 
                       processId={processId}
                       setProcessId={setProcessId}
+                      permissions={permissions}
+                      setPermissions={setPermissions}
                       isAuthenticated={isAuthenticated}
                       handleAuthenticate={handleAuthenticate}
                       ipcMethod={ipcMethod}

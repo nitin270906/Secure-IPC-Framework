@@ -1,11 +1,30 @@
 import React from 'react';
-import { Shield, Key, FileSignature, Users, ArrowRight } from 'lucide-react';
+import { Shield, Key, FileSignature, Users, ArrowRight, Folder } from 'lucide-react';
 
 const Documentation: React.FC = () => {
   return (
     <div className="bg-slate-800 rounded-lg p-8 shadow-xl border border-slate-700">
       <h2 className="text-3xl font-bold mb-8 bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">Framework Architecture & Security Specification</h2>
       
+      {/* System Architecture Diagram */}
+      <div className="mb-12">
+        <h3 className="text-xl font-bold text-white mb-6">System Architecture</h3>
+        <div className="bg-slate-950 p-6 rounded-lg font-mono text-xs text-slate-300 overflow-x-auto border border-slate-800 leading-relaxed whitespace-pre shadow-inner">
+{`
++----------------+       +------------------+       +----------------+
+|  React Client  | <---> |  Security Layer  | <---> |  IPC Backend   |
+| (Frontend UI)  | HTTPS | (Auth & Crypt)   | JSON  | (Flask/Spring) |
++----------------+       +------------------+       +----------------+
+        |                         |                         |
+        |                         v                         |
+        |                +------------------+               |
+        +--------------->|   IPC CHANNELS   |<--------------+
+                         | (Queues / Shm)   |
+                         +------------------+
+`}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
         <div className="col-span-1 space-y-8">
           <div>
@@ -73,27 +92,48 @@ const Documentation: React.FC = () => {
         </div>
       </div>
 
-      <div className="border-t border-slate-700 pt-8">
-        <h3 className="text-xl font-bold text-white mb-6">API Endpoint Reference</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-mono text-sm">
-          {[
-            { method: 'POST', url: '/api/authenticate', desc: 'Register process & get token' },
-            { method: 'POST', url: '/api/send', desc: 'Dispatch secure message' },
-            { method: 'POST', url: '/api/receive', desc: 'Poll for incoming messages' }
-          ].map((endpoint, i) => (
-            <div key={i} className="bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
-              <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
-                <span className={`font-bold ${
-                  endpoint.method === 'POST' ? 'text-green-400' : 'text-blue-400'
-                }`}>{endpoint.method}</span>
-                <span className="text-slate-500 text-xs">JSON</span>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8 border-t border-slate-700 pt-8">
+        <div>
+          <h3 className="text-xl font-bold text-white mb-6">API Endpoint Reference</h3>
+          <div className="space-y-4 font-mono text-sm">
+            {[
+              { method: 'POST', url: '/api/authenticate', desc: 'Register process & get token' },
+              { method: 'POST', url: '/api/send', desc: 'Dispatch secure message' },
+              { method: 'POST', url: '/api/receive', desc: 'Poll for incoming messages' }
+            ].map((endpoint, i) => (
+              <div key={i} className="bg-slate-900 rounded-lg overflow-hidden border border-slate-700">
+                <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+                  <span className={`font-bold ${
+                    endpoint.method === 'POST' ? 'text-green-400' : 'text-blue-400'
+                  }`}>{endpoint.method}</span>
+                  <span className="text-slate-500 text-xs">JSON</span>
+                </div>
+                <div className="p-4">
+                  <div className="text-blue-300 mb-2">{endpoint.url}</div>
+                  <div className="text-slate-400 text-xs">{endpoint.desc}</div>
+                </div>
               </div>
-              <div className="p-4">
-                <div className="text-blue-300 mb-2">{endpoint.url}</div>
-                <div className="text-slate-400 text-xs">{endpoint.desc}</div>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+            <Folder className="w-5 h-5 text-yellow-400" />
+            Project Structure
+          </h3>
+          <div className="bg-slate-900 p-6 rounded-lg font-mono text-sm text-slate-300 border border-slate-700 h-full">
+            <ul className="space-y-3">
+              <li className="flex items-center gap-2"><span className="text-purple-400">📁 src/</span></li>
+              <li className="pl-6 flex items-center gap-2">├─ <span className="text-blue-300">components/</span> <span className="text-slate-500 text-xs"># UI Widgets (Control Panel, Visualizer)</span></li>
+              <li className="pl-6 flex items-center gap-2">├─ <span className="text-blue-300">types/</span> <span className="text-slate-500 text-xs"># TypeScript Interfaces & Constants</span></li>
+              <li className="pl-6 flex items-center gap-2">├─ <span className="text-yellow-300">App.tsx</span> <span className="text-slate-500 text-xs"># Main Application Logic</span></li>
+              <li className="pl-6 flex items-center gap-2">└─ <span className="text-yellow-300">index.tsx</span> <span className="text-slate-500 text-xs"># Entry Point</span></li>
+              <li className="flex items-center gap-2 mt-2"><span className="text-purple-400">📁 backend/</span></li>
+              <li className="pl-6 flex items-center gap-2">├─ <span className="text-green-300">server.py</span> <span className="text-slate-500 text-xs"># Flask API Implementation</span></li>
+              <li className="pl-6 flex items-center gap-2">└─ <span className="text-blue-300">Controller.java</span> <span className="text-slate-500 text-xs"># Spring Boot API Implementation</span></li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
