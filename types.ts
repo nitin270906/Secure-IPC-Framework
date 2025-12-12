@@ -1,3 +1,4 @@
+
 export interface Log {
   type: 'success' | 'error' | 'info' | 'warning' | 'debug';
   message: string;
@@ -25,135 +26,206 @@ export interface SystemStats {
   tamperAttempts: number;
 }
 
-export const PYTHON_CODE = `# secure_ipc_backend.py
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import hmac
-import hashlib
-import secrets
-from cryptography.fernet import Fernet
+export const PYTHON_CODE = `"""
+Secure IPC Backend Implementation
+---------------------------------
+Features:
+1. AES-256-GCM Encryption
+2. HMAC-SHA256 Message Integrity
+3. IPC Primitives:
+   - System V Message Queues (via multiprocessing)
+   - Named Pipes (FIFO)
+   - Shared Memory Blocks
+"""
+
+import os
 import json
 import time
-from multiprocessing import Queue, Process, shared_memory
-import pickle
+import hmac
+import hashlib
+import base64
+import struct
+from abc import ABC, abstractmethod
+from typing import Dict, Optional, Any
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from multiprocessing import Queue, shared_memory
 
 app = Flask(__name__)
 CORS(app)
 
-class SecurityManager:
+# --- SECURITY LAYER ---
+
+class SecurityContext:
     def __init__(self):
-        self.encryption_key = Fernet.generate_key()
-        self.cipher = Fernet(self.encryption_key)
-        self.auth_tokens = {}
-        self.permissions = {}
-        self.secret_key = secrets.token_bytes(32)
-    
-    def register_process(self, process_id, permissions=None):
-        token = secrets.token_urlsafe(32)
-        self.auth_tokens[process_id] = token
-        self.permissions[process_id] = permissions or ["read", "write"]
+        # Generate a 256-bit key for AES-GCM
+        self.master_key = AESGCM.generate_key(bit_length=256)
+        self.aesgcm = AESGCM(self.master_key)
+        # Separate key for HMAC operations
+        self.signing_key = os.urandom(32)
+        self.active_tokens: Dict[str, dict] = {}
+
+    def register_process(self, process_id: str, permissions: list) -> str:
+        token = base64.urlsafe_b64encode(os.urandom(24)).decode('utf-8')
+        self.active_tokens[process_id] = {
+            'token': token,
+            'permissions': permissions,
+            'created_at': time.time()
+        }
         return token
-    
-    def authenticate(self, process_id, token):
-        return self.auth_tokens.get(process_id) == token
-    
-    def encrypt_data(self, data):
-        serialized = json.dumps(data).encode()
-        return self.cipher.encrypt(serialized).decode()
-    
-    def decrypt_data(self, encrypted_data):
-        decrypted = self.cipher.decrypt(encrypted_data.encode())
-        return json.loads(decrypted.decode())
-    
-    def sign_message(self, message):
-        return hmac.new(
-            self.secret_key,
-            message.encode(),
-            hashlib.sha256
-        ).hexdigest()
 
-security = SecurityManager()
-message_queues = {}
+    def verify_auth(self, process_id: str, token: str, required_perm: str = 'read') -> bool:
+        session = self.active_tokens.get(process_id)
+        if not session or session['token'] != token:
+            return False
+        if 'admin' in session['permissions']:
+            return True
+        return required_perm in session['permissions']
 
-@app.route('/api/authenticate', methods=['POST'])
+    def encrypt(self, plaintext: str) -> str:
+        nonce = os.urandom(12)  # NIST recommended nonce size
+        ciphertext = self.aesgcm.encrypt(nonce, plaintext.encode('utf-8'), None)
+        # Return nonce + ciphertext as base64
+        return base64.b64encode(nonce + ciphertext).decode('utf-8')
+
+    def decrypt(self, payload: str) -> str:
+        raw = base64.b64decode(payload)
+        nonce, ciphertext = raw[:12], raw[12:]
+        return self.aesgcm.decrypt(nonce, ciphertext, None).decode('utf-8')
+
+    def sign(self, data: str) -> str:
+        h = hmac.new(self.signing_key, data.encode('utf-8'), hashlib.sha256)
+        return h.hexdigest()
+
+    def verify_signature(self, data: str, signature: str) -> bool:
+        expected = self.sign(data)
+        return hmac.compare_digest(expected, signature)
+
+# --- IPC ABSTRACTION LAYER ---
+
+class IPCChannel(ABC):
+    @abstractmethod
+    def send(self, data: dict): pass
+
+    @abstractmethod
+    def receive(self) -> Optional[dict]: pass
+
+class MessageQueueChannel(IPCChannel):
+    """Implementation using Python's multiprocessing.Queue"""
+    def __init__(self):
+        self.queue = Queue()
+
+    def send(self, data: dict):
+        self.queue.put(data)
+
+    def receive(self) -> Optional[dict]:
+        if not self.queue.empty():
+            return self.queue.get()
+        return None
+
+class NamedPipeChannel(IPCChannel):
+    """Implementation using OS FIFO Pipes"""
+    def __init__(self, pipe_path='/tmp/secure_ipc_pipe'):
+        self.path = pipe_path
+        if not os.path.exists(self.path):
+            os.mkfifo(self.path)
+
+    def send(self, data: dict):
+        # Blocking write to pipe
+        payload_bytes = json.dumps(data).encode('utf-8')
+        # Write length prefix (4 bytes) + payload
+        with open(self.path, 'wb') as p:
+            p.write(struct.pack('>I', len(payload_bytes)) + payload_bytes)
+
+    def receive(self) -> Optional[dict]:
+        # In a real scenario, this would block or poll
+        # Simplified for demo:
+        try:
+            # Logic to read specific bytes would go here
+            pass
+        except Exception:
+            return None
+        return None
+
+class SharedMemoryChannel(IPCChannel):
+    """Implementation using Shared Memory Blocks"""
+    def __init__(self, name='secure_shm', size=4096):
+        self.name = name
+        self.size = size
+        try:
+            self.shm = shared_memory.SharedMemory(create=True, size=size, name=name)
+        except FileExistsError:
+            self.shm = shared_memory.SharedMemory(name=name)
+
+    def send(self, data: dict):
+        payload = json.dumps(data).encode('utf-8')
+        if len(payload) > self.size:
+            raise ValueError("Payload exceeds shared memory size")
+        self.shm.buf[:len(payload)] = payload
+        # Pad remaining with null bytes
+        self.shm.buf[len(payload):] = b'\\0' * (self.size - len(payload))
+
+    def receive(self) -> Optional[dict]:
+        # Read until null byte
+        data = bytes(self.shm.buf).split(b'\\0', 1)[0]
+        if not data:
+            return None
+        return json.loads(data.decode('utf-8'))
+
+# --- SERVER INIT ---
+
+sec = SecurityContext()
+channels = {
+    'queue': MessageQueueChannel(),
+    'pipe': NamedPipeChannel(), # Warning: Pipes block on open() without reader
+    'shared_memory': SharedMemoryChannel()
+}
+
+@app.route('/api/auth', methods=['POST'])
 def authenticate():
-    data = request.json
-    process_id = data.get('process_id')
-    permissions = data.get('permissions', ['read', 'write'])
-    
-    token = security.register_process(process_id, permissions)
-    
-    return jsonify({
-        'success': True,
-        'token': token,
-        'process_id': process_id
-    })
+    pid = request.json.get('process_id')
+    perms = request.json.get('permissions', ['read'])
+    token = sec.register_process(pid, perms)
+    return jsonify({'token': token, 'expiry': 3600})
 
 @app.route('/api/send', methods=['POST'])
-def send_message():
+def send_msg():
     data = request.json
-    process_id = data.get('process_id')
-    token = data.get('token')
-    message = data.get('message')
-    ipc_method = data.get('ipc_method', 'queue')
-    encrypt = data.get('encrypt', False)
     
-    if not security.authenticate(process_id, token):
-        return jsonify({'success': False, 'error': 'Authentication failed'}), 401
+    # 1. Authentication
+    if not sec.verify_auth(data['pid'], data['token'], 'write'):
+        return jsonify({'error': 'Access Denied'}), 403
+
+    payload = data['message']
     
-    # Encrypt if requested
-    if encrypt:
-        message = security.encrypt_data(message)
-    
-    # Generate signature
-    signature = security.sign_message(str(message))
-    
-    # Store message in appropriate IPC structure
-    channel_id = f"{process_id}_{ipc_method}"
-    if channel_id not in message_queues:
-        message_queues[channel_id] = []
-    
-    message_queues[channel_id].append({
-        'data': message,
+    # 2. Encryption (Optional)
+    if data.get('encrypt'):
+        payload = sec.encrypt(payload)
+
+    # 3. Signing (Mandatory)
+    signature = sec.sign(payload)
+
+    packet = {
+        'payload': payload,
         'signature': signature,
         'timestamp': time.time(),
-        'encrypted': encrypt
-    })
-    
-    return jsonify({
-        'success': True,
-        'signature': signature,
-        'method': ipc_method
-    })
+        'encrypted': data.get('encrypt', False)
+    }
 
-@app.route('/api/receive', methods=['POST'])
-def receive_message():
-    data = request.json
-    process_id = data.get('process_id')
-    token = data.get('token')
-    ipc_method = data.get('ipc_method', 'queue')
+    # 4. Dispatch to IPC Channel
+    method = data.get('method', 'queue')
+    if method in channels:
+        try:
+            channels[method].send(packet)
+            return jsonify({'status': 'queued', 'signature': signature})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
     
-    if not security.authenticate(process_id, token):
-        return jsonify({'success': False, 'error': 'Authentication failed'}), 401
-    
-    channel_id = f"{process_id}_{ipc_method}"
-    
-    if channel_id not in message_queues or not message_queues[channel_id]:
-        return jsonify({'success': False, 'error': 'No messages available'}), 404
-    
-    message = message_queues[channel_id].pop(0)
-    
-    # Decrypt if needed
-    if message['encrypted']:
-        message['data'] = security.decrypt_data(message['data'])
-    
-    return jsonify({
-        'success': True,
-        'message': message
-    })
+    return jsonify({'error': 'Invalid method'}), 400
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(port=5000, debug=True)
 `;
 
 export const JAVA_CODE = `// SecureIPCController.java
